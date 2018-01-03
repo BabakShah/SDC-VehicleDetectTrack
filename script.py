@@ -1,180 +1,134 @@
-import matplotlib.image as mpimg
+#=============================================================================
+#=== Importing libraries =====================================================
+#=============================================================================
+
 import numpy as np
 import cv2
-from skimage.feature import hog
-import matplotlib.image as mpimg
-import matplotlib.pyplot as plt
 import pickle
+import glob
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import imageio
+imageio.plugins.ffmpeg.download()
+from ipywidgets import interact, interactive, fixed
+from moviepy.editor import VideoFileClip
+from IPython.display import HTML
+from skimage.feature import hog
+from random import *
 
-dist_pickle = pickle.load( open("svc_pickle.p", "rb" ) )
-svc = dist_pickle["svc"]
-X_scaler = dist_pickle["scaler"]
-orient = dist_pickle["orient"]
-pix_per_cell = dist_pickle["pix_per_cell"]
-cell_per_block = dist_pickle["cell_per_block"]
-spatial_size = dist_pickle["spatial_size"]
-hist_bins = dist_pickle["hist_bins"]
-
-img = mpimg.imread('./test_images/test1.jpg')
-
-#========================
-#=== Get HOG Features ===
-#========================
-
-# Define a function to return HOG features and visualization
-def get_hog_features(img, orient, pix_per_cell, cell_per_block, 
-                        vis=False, feature_vec=True):
-    # Call with two outputs if vis==True
-    if vis == True:
-        features, hog_image = hog(img, orientations=orient, 
-                                  pixels_per_cell=(pix_per_cell, pix_per_cell),
-                                  cells_per_block=(cell_per_block, cell_per_block), 
-                                  transform_sqrt=True, 
-                                  visualise=vis, feature_vector=feature_vec)
-        return features, hog_image
-    # Otherwise call with one output
-    else:      
-        features = hog(img, orientations=orient, 
-                       pixels_per_cell=(pix_per_cell, pix_per_cell),
-                       cells_per_block=(cell_per_block, cell_per_block), 
-                       transform_sqrt=True, 
-                       visualise=vis, feature_vector=feature_vec)
-        return features
-
-#==============================
-#=== Compute Color Features ===
-#==============================
-
-# Define a function to compute binned color features  
-def bin_spatial(img, size=(32, 32)):
-    # Use cv2.resize().ravel() to create the feature vector
-    features = cv2.resize(img, size).ravel() 
-    # Return the feature vector
-    return features
-
-# Define a function to compute color histogram features 
-# NEED TO CHANGE bins_range if reading .png files with mpimg!
-def color_hist(img, nbins=32, bins_range=(0, 256)):
-    # Compute the histogram of the color channels separately
-    channel1_hist = np.histogram(img[:,:,0], bins=nbins, range=bins_range)
-    channel2_hist = np.histogram(img[:,:,1], bins=nbins, range=bins_range)
-    channel3_hist = np.histogram(img[:,:,2], bins=nbins, range=bins_range)
-    # Concatenate the histograms into a single feature vector
-    hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
-    # Return the individual histograms, bin_centers and feature vector
-    return hist_features
-
-# Define a function to extract features from a list of images
-# Have this function call bin_spatial() and color_hist()
-def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
-                        hist_bins=32, orient=9, 
-                        pix_per_cell=8, cell_per_block=2, hog_channel=0,
-                        spatial_feat=True, hist_feat=True, hog_feat=True):
-    # Create a list to append feature vectors to
-    features = []
-    # Iterate through the list of images
-    for file in imgs:
-        file_features = []
-        # Read in each one by one
-        image = mpimg.imread(file)
-        # apply color conversion if other than 'RGB'
-        if color_space != 'RGB':
-            if color_space == 'HSV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-            elif color_space == 'LUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
-            elif color_space == 'HLS':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-            elif color_space == 'YUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
-            elif color_space == 'YCrCb':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
-        else: feature_image = np.copy(image)      
-
-        if spatial_feat == True:
-            spatial_features = bin_spatial(feature_image, size=spatial_size)
-            file_features.append(spatial_features)
-        if hist_feat == True:
-            # Apply color_hist()
-            hist_features = color_hist(feature_image, nbins=hist_bins)
-            file_features.append(hist_features)
-        if hog_feat == True:
-        # Call get_hog_features() with vis=False, feature_vec=True
-            if hog_channel == 'ALL':
-                hog_features = []
-                for channel in range(feature_image.shape[2]):
-                    hog_features.append(get_hog_features(feature_image[:,:,channel], 
-                                        orient, pix_per_cell, cell_per_block, 
-                                        vis=False, feature_vec=True))
-                hog_features = np.ravel(hog_features)        
-            else:
-                hog_features = get_hog_features(feature_image[:,:,hog_channel], orient, 
-                            pix_per_cell, cell_per_block, vis=False, feature_vec=True)
-            # Append the new feature vector to the features list
-            file_features.append(hog_features)
-        features.append(np.concatenate(file_features))
-    # Return list of feature vectors
-    return features
+car_images = glob.glob('vehicles/*/*.png')
+car = []
+for fname in car_images:
+    car.append(fname)
     
-# Define a function that takes an image,
-# start and stop positions in both x and y, 
-# window size (x and y dimensions),  
-# and overlap fraction (for both x and y)
-def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None], 
-                    xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
-    # If x and/or y start/stop positions not defined, set to image size
-    if x_start_stop[0] == None:
-        x_start_stop[0] = 0
-    if x_start_stop[1] == None:
-        x_start_stop[1] = img.shape[1]
-    if y_start_stop[0] == None:
-        y_start_stop[0] = 0
-    if y_start_stop[1] == None:
-        y_start_stop[1] = img.shape[0]
-    # Compute the span of the region to be searched    
-    xspan = x_start_stop[1] - x_start_stop[0]
-    yspan = y_start_stop[1] - y_start_stop[0]
-    # Compute the number of pixels per step in x/y
-    nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
-    ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
-    # Compute the number of windows in x/y
-    nx_buffer = np.int(xy_window[0]*(xy_overlap[0]))
-    ny_buffer = np.int(xy_window[1]*(xy_overlap[1]))
-    nx_windows = np.int((xspan-nx_buffer)/nx_pix_per_step) 
-    ny_windows = np.int((yspan-ny_buffer)/ny_pix_per_step) 
-    # Initialize a list to append window positions to
-    window_list = []
-    # Loop through finding x and y window positions
-    # Note: you could vectorize this step, but in practice
-    # you'll be considering windows one by one with your
-    # classifier, so looping makes sense
-    for ys in range(ny_windows):
-        for xs in range(nx_windows):
-            # Calculate window position
-            startx = xs*nx_pix_per_step + x_start_stop[0]
-            endx = startx + xy_window[0]
-            starty = ys*ny_pix_per_step + y_start_stop[0]
-            endy = starty + xy_window[1]
-            
-            # Append window position to list
-            window_list.append(((startx, starty), (endx, endy)))
-    # Return the list of windows
-    return window_list
+notcar_images = glob.glob('non-vehicles/*/*.png')
+notcar = []
+for fname in notcar_images:
+    notcar.append(fname)
+    
+print("No. of car images = ")
+print(len(car))
 
-#==============================
-#=== Draw Bounding Boxes ======
-#==============================
+print("No. of not car images = ")
+print(len(notcar))
 
-# Define a function to draw bounding boxes
-def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
-    # Make a copy of the image
-    imcopy = np.copy(img)
-    # Iterate through the bounding boxes
-    for bbox in bboxes:
-        # Draw a rectangle given bbox coordinates
-        cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
-    # Return the image copy with boxes drawn
-    return imcopy
+fig, axs = plt.subplots(8,8, figsize=(10,20))
+axs = axs.ravel()
+
+for i in range(0, 64):
+    car_img = cv2.imread(car_images[randint(0,len(car_images))])
+    car_img = cv2.cvtColor(car_img,cv2.COLOR_BGR2RGB)
+    axs[i].axis('off')
+    axs[i].imshow(car_img)
+plt.show()
+
+for i in range(0, 64):
+    notcar_img = cv2.imread(notcar_images[randint(0,len(notcar_images))])
+    notcar_img = cv2.cvtColor(notcar_img,cv2.COLOR_BGR2RGB)
+    axs[i].axis('off')
+    axs[i].imshow(notcar_img)
+plt.show()
+
+# # Define feature parameters
+# color_space = 'YCrCb'  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+
+# orient = 9  # HOG orientation angles
+# pix_per_cell = 8
+# cell_per_block = 2
+# hog_channel = "ALL"  # aka 1st feature channel. Can be 0, 1, 2, or "ALL"
+# spatial_size = (32, 32)  # Spatial binning dimensions
+# hist_bins = 32  # Number of histogram bins
+# spatial_feat = True  # Spatial features on or off
+# hist_feat = True  # Histogram features on or off
+# hog_feat = True  # HOG features on or off
+
+# n_samples = 1000
+# random_idxs = np.random.randint(0, len(cars), n_samples)
+# # test_cars = np.array(cars)[random_idxs]  # Train on only random 1000 images. Takes ~=10 seconds.
+# test_cars = cars  # Trains on all available data. Takes along time!
+# # test_notcars = np.array(notcars)[random_idxs]  # Train on only random 1000 images. Takes ~=10 seconds.
+# test_notcars = notcars  # Trains on all available data. Takes along time!
+
+# car_features = extract_features(test_cars, color_space=color_space, spatial_size=spatial_size,
+#                                 hist_bins=hist_bins, orient=orient,
+#                                 pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
+#                                 hog_channel=hog_channel,
+#                                 spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
+# notcar_features = extract_features(test_notcars, color_space=color_space, spatial_size=spatial_size,
+#                                    hist_bins=hist_bins, orient=orient,
+#                                    pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
+#                                    hog_channel=hog_channel,
+#                                    spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
+
+# X = np.vstack((car_features, notcar_features)).astype(np.float64)
+# # Fit a per-column scaler
+# X_scaler = StandardScaler().fit(X)
+# # Apply the scaler to X
+# scaled_X = X_scaler.transform(X)
+
+# # Define the labels vector
+# y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+
+# # Split up data into randomised training and test sets
+# rand_state = np.random.randint(0, 100)
+# X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.1, random_state=rand_state)
+
+# print('Using :', orient, 'orientations,', pix_per_cell, 'pixels per cell,', cell_per_block, 'cells per block,',
+#       hist_bins, 'histogram bins, and', spatial_size, 'spatial sampling')
+
+# print('Feature vector length :', len(X_train[0]))
+
+# # Use a linear SVC
+# svc = LinearSVC()
+
+# # Check the training time for the SVC
+# svc.fit(X_train, y_train)
+
+# # Check the score of the SVC
+# print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+
+# # Save Linear SVC Classifier
+# dist_pickle = {}
+# dist_pickle['svc'] = svc
+# dist_pickle['X_scaler'] = X_scaler
+# dist_pickle['orient'] = orient
+# dist_pickle['pix_per_cell'] = pix_per_cell
+# dist_pickle['cell_per_block'] = cell_per_block
+# dist_pickle['spatial_size'] = spatial_size
+# dist_pickle['hist_bins'] = hist_bins
+# pickle.dump(dist_pickle, open("svc_pickle.p", "wb"))
+
+# dist_pickle = pickle.load( open("svc_pickle.p", "rb" ) )
+# svc = dist_pickle["svc"]
+# X_scaler = dist_pickle["scaler"]
+# orient = dist_pickle["orient"]
+# pix_per_cell = dist_pickle["pix_per_cell"]
+# cell_per_block = dist_pickle["cell_per_block"]
+# spatial_size = dist_pickle["spatial_size"]
+# hist_bins = dist_pickle["hist_bins"]
+
+# img = mpimg.imread('./test_images/test1.jpg')
 
 
 
@@ -244,10 +198,10 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
                 
     return draw_img
     
-ystart = 400
-ystop = 656
-scale = 1.5
+# ystart = 400
+# ystop = 656
+# scale = 1.5
     
-out_img = find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+# out_img = find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
 
-plt.imshow(out_img)
+# plt.imshow(out_img)
