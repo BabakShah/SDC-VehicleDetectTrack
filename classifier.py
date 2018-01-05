@@ -1,3 +1,7 @@
+#=============================================================================
+#=== Importing libraries =====================================================
+#=============================================================================
+
 import numpy as np
 import cv2
 import pickle
@@ -11,56 +15,165 @@ from ipywidgets import interact, interactive, fixed
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 from skimage.feature import hog
+from random import *
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
-images = glob.glob('vehicles/*/*.png')
+cars_images = glob.glob('vehicles/*/*.png')
 cars = []
-for fname in images:
+for fname in cars_images:
     cars.append(fname)
     
-images = glob.glob('non-vehicles/*/*.png')
+notcars_images = glob.glob('non-vehicles/*/*.png')
 notcars = []
-for fname in images:
+for fname in notcars_images:
     notcars.append(fname)
     
-print("No. of car images = ")
-print(len(cars))
+# print("No. of car images = ")
+# print(len(cars))
 
-print("No. of not car images = ")
-print(len(notcars))
+# print("No. of not car images = ")
+# print(len(notcars))
+
+# fig, axs = plt.subplots(8,8, figsize=(10,20))
+# axs = axs.ravel()
+
+# for i in range(0, 64):
+#     car_img = cv2.imread(car_images[randint(0,len(car_images))])
+#     car_img = cv2.cvtColor(car_img,cv2.COLOR_BGR2RGB)
+#     axs[i].axis('off')
+#     axs[i].imshow(car_img)
+# plt.show()
+
+# for i in range(0, 64):
+#     notcar_img = cv2.imread(notcar_images[randint(0,len(notcar_images))])
+#     notcar_img = cv2.cvtColor(notcar_img,cv2.COLOR_BGR2RGB)
+#     axs[i].axis('off')
+#     axs[i].imshow(notcar_img)
+# plt.show()
+
+# Generate a random index to look at a car image
+# ind = np.random.randint(0, len(car))
+# # Read in the image
+# image = mpimg.imread(car[ind])
+# gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+# # Define HOG parameters
+# orient = 9
+# pix_per_cell = 8
+# cell_per_block = 2
+# # Call our function with vis=True to see an image output
+# features, hog_image = get_hog_features(gray, orient, 
+#                         pix_per_cell, cell_per_block, 
+#                         vis=True, feature_vec=False)
+
+# # Plot the examples
+# fig = plt.figure()
+# plt.subplot(121)
+# plt.imshow(image, cmap='gray')
+# plt.title('Random Car Image')
+# plt.subplot(122)
+# plt.imshow(hog_image, cmap='gray')
+# plt.title('HOG Visualization')  
+# plt.show()     
+
+#=============================================================================
+#=== HOG Features ============================================================
+#=============================================================================
+
+# Define a function to return HOG features and visualization
+def get_hog_features(img, orient, pix_per_cell, cell_per_block, 
+                        vis=False, feature_vec=True):
+    # Call with two outputs if vis==True
+    if vis == True:
+        features, hog_image = hog(img, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
+                                  cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
+                                  visualise=vis, feature_vector=feature_vec)
+        return features, hog_image
+    # Otherwise call with one output
+    else:      
+        features = hog(img, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
+                       cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, 
+                       visualise=vis, feature_vector=feature_vec)
+        return features
+
+#=============================================================================
+#=== Extract Features ========================================================
+#=============================================================================
+
+# Define a function to extract features from a list of images
+# Have this function call bin_spatial() and color_hist()
+def extract_features(imgs, cspace='RGB', orient=9, 
+                        pix_per_cell=8, cell_per_block=2, hog_channel=0):
+    # Create a list to append feature vectors to
+    features = []
+    # Iterate through the list of images
+    for file in imgs:
+        # Read in each one by one
+        image = mpimg.imread(file)
+        # apply color conversion if other than 'RGB'
+        if cspace != 'RGB':
+            if cspace == 'HSV':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+            elif cspace == 'LUV':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
+            elif cspace == 'HLS':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+            elif cspace == 'YUV':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+            elif cspace == 'YCrCb':
+                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+        else: feature_image = np.copy(image)      
+
+        # Call get_hog_features() with vis=False, feature_vec=True
+        if hog_channel == 'ALL':
+            hog_features = []
+            for channel in range(feature_image.shape[2]):
+                hog_features.append(get_hog_features(feature_image[:,:,channel], 
+                                    orient, pix_per_cell, cell_per_block, 
+                                    vis=False, feature_vec=True))
+            hog_features = np.ravel(hog_features)        
+        else:
+            hog_features = get_hog_features(feature_image[:,:,hog_channel], orient, 
+                        pix_per_cell, cell_per_block, vis=False, feature_vec=True)
+        # Append the new feature vector to the features list
+        features.append(hog_features)
+    # Return list of feature vectors
+    return features
 
 
-# Define feature parameters
-color_space = 'YCrCb'  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+# # Divide up into cars and notcars
+# images = glob.glob('*.jpeg')
+# cars = []
+# notcars = []
+# for image in images:
+#     if 'image' in image or 'extra' in image:
+#         notcars.append(image)
+#     else:
+#         cars.append(image)
 
-orient = 9  # HOG orientation angles
+# Reduce the sample size because HOG features are slow to compute
+# The quiz evaluator times out after 13s of CPU time
+# sample_size = 500
+# cars = cars[0:sample_size]
+# notcars = notcars[0:sample_size]
+
+### TODO: Tweak these parameters and see how the results change.
+colorspace = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+orient = 9
 pix_per_cell = 8
 cell_per_block = 2
-hog_channel = "ALL"  # aka 1st feature channel. Can be 0, 1, 2, or "ALL"
-spatial_size = (32, 32)  # Spatial binning dimensions
-hist_bins = 32  # Number of histogram bins
-spatial_feat = True  # Spatial features on or off
-hist_feat = True  # Histogram features on or off
-hog_feat = True  # HOG features on or off
+hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 
-n_samples = 1000
-random_idxs = np.random.randint(0, len(cars), n_samples)
-# test_cars = np.array(cars)[random_idxs]  # Train on only random 1000 images. Takes ~=10 seconds.
-test_cars = cars  # Trains on all available data. Takes along time!
-# test_notcars = np.array(notcars)[random_idxs]  # Train on only random 1000 images. Takes ~=10 seconds.
-test_notcars = notcars  # Trains on all available data. Takes along time!
+car_features = extract_features(cars, cspace=colorspace, orient=orient, 
+                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, 
+                        hog_channel=hog_channel)
+notcar_features = extract_features(notcars, cspace=colorspace, orient=orient, 
+                        pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, 
+                        hog_channel=hog_channel)
 
-car_features = extract_features(test_cars, color_space=color_space, spatial_size=spatial_size,
-                                hist_bins=hist_bins, orient=orient,
-                                pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                hog_channel=hog_channel,
-                                spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
-notcar_features = extract_features(test_notcars, color_space=color_space, spatial_size=spatial_size,
-                                   hist_bins=hist_bins, orient=orient,
-                                   pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,
-                                   hog_channel=hog_channel,
-                                   spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
-
-X = np.vstack((car_features, notcar_features)).astype(np.float64)
+# Create an array stack of feature vectors
+X = np.vstack((car_features, notcar_features)).astype(np.float64)                        
 # Fit a per-column scaler
 X_scaler = StandardScaler().fit(X)
 # Apply the scaler to X
@@ -69,31 +182,31 @@ scaled_X = X_scaler.transform(X)
 # Define the labels vector
 y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
 
-# Split up data into randomised training and test sets
+
+# Split up data into randomized training and test sets
 rand_state = np.random.randint(0, 100)
-X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.1, random_state=rand_state)
+X_train, X_test, y_train, y_test = train_test_split(
+    scaled_X, y, test_size=0.2, random_state=rand_state)
 
-print('Using :', orient, 'orientations,', pix_per_cell, 'pixels per cell,', cell_per_block, 'cells per block,',
-      hist_bins, 'histogram bins, and', spatial_size, 'spatial sampling')
-
-print('Feature vector length :', len(X_train[0]))
-
-# Use a linear SVC
+print('Using:',orient,'orientations',pix_per_cell,
+    'pixels per cell and', cell_per_block,'cells per block')
+print('Feature vector length:', len(X_train[0]))
+# Use a linear SVC 
 svc = LinearSVC()
-
-# Check the training time for the SVC
 svc.fit(X_train, y_train)
 
 # Check the score of the SVC
 print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+# Check the prediction time for a single sample
+n_predict = 10
+print('My SVC predicts: ', svc.predict(X_test[0:n_predict]))
+print('For these',n_predict, 'labels: ', y_test[0:n_predict])
 
-# Save Linear SVC Classifier
-dist_pickle = {}
-dist_pickle['svc'] = svc
-dist_pickle['X_scaler'] = X_scaler
-dist_pickle['orient'] = orient
-dist_pickle['pix_per_cell'] = pix_per_cell
-dist_pickle['cell_per_block'] = cell_per_block
-dist_pickle['spatial_size'] = spatial_size
-dist_pickle['hist_bins'] = hist_bins
-pickle.dump(dist_pickle, open("svc_pickle.p", "wb"))
+pickle.dump( svc, open( "svc_pickle.p", "wb" ) )
+pickle.dump( X_scaler ,open("X_scaler_pickle.p", "wb" ) )
+
+loaded_svc = pickle.load( open( "svc_pickle.p", "rb" ) )
+loaded_X_scaler = pickle.load( open( "X_scaler_pickle.p", "rb" ) )
+
+print(loaded_svc)
+print(loaded_X_scaler)
