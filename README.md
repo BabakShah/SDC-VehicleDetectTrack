@@ -2,11 +2,11 @@
 
 <center>
 
-<img src="output_images/Main.jpg" width="90%" alt="Vehicle Detection" />
+<img src="output_images/Main.jpg" width="100%" alt="Vehicle Detection" />
 
 </center>
 
-Hello there! I'm Babak. Let me introduce you to my project. In this project, I wrote a software pipeline to detect and track vehicles in a video. Using different training dataset and features to train the classifier; this algorithm can be used to detect and teack other objects such as pedestrains or cyclists. This project was written using Python object oriented programming.
+Hello there! I'm Babak. Let me introduce you to my project. In this project, I wrote a software pipeline to detect and track vehicles in a video. Using different training dataset and features to train the classifier, this algorithm can be used to detect and track other objects such as pedestrains or cyclists. This project was written using Python object oriented programming, Machine Learning, and Computer Vision libraries.
 
 
 ### Pipeline:
@@ -67,15 +67,24 @@ The classifier and the scaler are saved using pickle so we can use them later in
 
 #### 3. Sliding Window Search
 
-Next, I implemented a sliding window search. I decided to search random window positions at random scales all over the image and came up with this. Finally I searched on two scales using YCrCb 3-channel HOG features in the feature vector, which provided a good result. Here are some example images:
+Next, I implemented a sliding window search. I decided to search random window positions at random scales. Finally I searched on two scales using YCrCb 3-channel HOG features in the feature vector, which provided a good result. Here are some example images:
 
 <img src=output_images/SlidingWindow1.png />
 <img src=output_images/SlidingWindow3.png />
 <img src=output_images/SlidingWindow4.png />
 
-#### 4. Heatmap
+#### 4. Heatmap Filtering and Smoothing
+
+I implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+I recorded the positions of positive detections in each frame of the video. From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions. I then used scipy.ndimage.measurements.label() to identify individual blobs in the heatmap. I then assumed each blob corresponded to a vehicle. I constructed bounding boxes to cover the area of each blob detected.
+
+Here is a frame and itscorresponding heatmap:
 
 <img src=output_images/heat.png />
+
+Here the resulting bounding boxes are drawn onto the last frame:
+
+<img src="output_images/Main.jpg" width="100%" alt="Vehicle Detection" />
 
 ---
 
@@ -88,3 +97,5 @@ Here's a [link to my video result](./project_video_output.mp4)
 ---
 
 ### Discussion on making the pipeline more robust?
+
+Vehicle detection and tracking is a challenging problem. The sliding window method is computationally slow and expensive, i.e. it takes about 420 seconds to process a 50 seconds video. Some of the things that I would like to try for this project are optimizing the code for real-time implementation, adding the lane detection and tracking pipeline for a more comprehensive detection and tracking algorithm. And also experimenting with deep learning for the same task. The method is reliant on the training data in this case images of cars and not cars, the distribution and normalization of the dataset also plays an important role in making sure the classifier can be generalized.
