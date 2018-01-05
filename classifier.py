@@ -20,6 +20,7 @@ from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
+# Divide up into cars and notcars
 cars_images = glob.glob('vehicles/*/*.png')
 cars = []
 for fname in cars_images:
@@ -29,53 +30,23 @@ notcars_images = glob.glob('non-vehicles/*/*.png')
 notcars = []
 for fname in notcars_images:
     notcars.append(fname)
-    
-# print("No. of car images = ")
-# print(len(cars))
-
-# print("No. of not car images = ")
-# print(len(notcars))
 
 # fig, axs = plt.subplots(8,8, figsize=(10,20))
 # axs = axs.ravel()
 
 # for i in range(0, 64):
-#     car_img = cv2.imread(car_images[randint(0,len(car_images))])
-#     car_img = cv2.cvtColor(car_img,cv2.COLOR_BGR2RGB)
+#     cars_img = cv2.imread(cars_images[randint(0,len(car_images))])
+#     cars_img = cv2.cvtColor(cars_img,cv2.COLOR_BGR2RGB)
 #     axs[i].axis('off')
-#     axs[i].imshow(car_img)
+#     axs[i].imshow(cars_img)
 # plt.show()
 
 # for i in range(0, 64):
-#     notcar_img = cv2.imread(notcar_images[randint(0,len(notcar_images))])
-#     notcar_img = cv2.cvtColor(notcar_img,cv2.COLOR_BGR2RGB)
+#     notcars_img = cv2.imread(notcars_images[randint(0,len(notcar_images))])
+#     notcars_img = cv2.cvtColor(notcars_img,cv2.COLOR_BGR2RGB)
 #     axs[i].axis('off')
-#     axs[i].imshow(notcar_img)
+#     axs[i].imshow(notcars_img)
 # plt.show()
-
-# Generate a random index to look at a car image
-# ind = np.random.randint(0, len(car))
-# # Read in the image
-# image = mpimg.imread(car[ind])
-# gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-# # Define HOG parameters
-# orient = 9
-# pix_per_cell = 8
-# cell_per_block = 2
-# # Call our function with vis=True to see an image output
-# features, hog_image = get_hog_features(gray, orient, 
-#                         pix_per_cell, cell_per_block, 
-#                         vis=True, feature_vec=False)
-
-# # Plot the examples
-# fig = plt.figure()
-# plt.subplot(121)
-# plt.imshow(image, cmap='gray')
-# plt.title('Random Car Image')
-# plt.subplot(122)
-# plt.imshow(hog_image, cmap='gray')
-# plt.title('HOG Visualization')  
-# plt.show()     
 
 #=============================================================================
 #=== HOG Features ============================================================
@@ -141,16 +112,9 @@ def extract_features(imgs, cspace='RGB', orient=9,
     # Return list of feature vectors
     return features
 
-
-# # Divide up into cars and notcars
-# images = glob.glob('*.jpeg')
-# cars = []
-# notcars = []
-# for image in images:
-#     if 'image' in image or 'extra' in image:
-#         notcars.append(image)
-#     else:
-#         cars.append(image)
+#=============================================================================
+#=== Train SVM Classifier ====================================================
+#=============================================================================
 
 # Reduce the sample size because HOG features are slow to compute
 # The quiz evaluator times out after 13s of CPU time
@@ -158,7 +122,6 @@ def extract_features(imgs, cspace='RGB', orient=9,
 # cars = cars[0:sample_size]
 # notcars = notcars[0:sample_size]
 
-### TODO: Tweak these parameters and see how the results change.
 colorspace = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
 orient = 9
 pix_per_cell = 8
@@ -182,7 +145,6 @@ scaled_X = X_scaler.transform(X)
 # Define the labels vector
 y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
 
-
 # Split up data into randomized training and test sets
 rand_state = np.random.randint(0, 100)
 X_train, X_test, y_train, y_test = train_test_split(
@@ -205,6 +167,7 @@ print('For these',n_predict, 'labels: ', y_test[0:n_predict])
 pickle.dump( svc, open( "svc_pickle.p", "wb" ) )
 pickle.dump( X_scaler ,open("X_scaler_pickle.p", "wb" ) )
 
+# Test to see the data was successfully saved
 loaded_svc = pickle.load( open( "svc_pickle.p", "rb" ) )
 loaded_X_scaler = pickle.load( open( "X_scaler_pickle.p", "rb" ) )
 
